@@ -1,6 +1,6 @@
 /* Service worker: guarda a "casca" do totem para abrir mesmo sem internet
    (o conteúdo do Apps Script sempre vem da rede). */
-const CACHE = 'totem-fr-v1';
+const CACHE = 'totem-fr-v3';
 const ARQUIVOS = ['./', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png'];
 

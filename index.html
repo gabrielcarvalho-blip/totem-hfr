@@ -23,6 +23,23 @@
     .aviso button{margin-top:10px;font-size:20px;font-weight:700;padding:18px 36px;border-radius:999px;border:0;background:#fff;color:#206CBA}
     /* Canto secreto: 5 toques rápidos no canto superior direito recarregam o app */
     #canto{position:fixed;top:0;right:0;width:70px;height:70px;z-index:6}
+    /* ---- Tela de instalação ---- */
+    #instalar{position:fixed;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
+      background:rgba(18,71,107,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:24px}
+    #instalar[hidden]{display:none}
+    .caixa{background:#fff;border-radius:24px;padding:40px 44px;max-width:520px;width:100%;text-align:center;
+      box-shadow:0 24px 60px rgba(0,0,0,.25);position:relative;overflow:hidden}
+    .caixa::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;
+      background:linear-gradient(90deg,#206CBA 0 28%,#64B22D 49%,#DAB83B 67%,#DF2937 87%,#EE7A27)}
+    .caixa img{width:110px;height:110px;border-radius:24px}
+    .caixa h2{font-size:28px;color:#203748;margin:18px 0 8px;letter-spacing:-.02em}
+    .caixa p{font-size:18px;color:#586F7E;margin:0 0 26px;line-height:1.45}
+    #btnInstalar{display:inline-flex;align-items:center;gap:12px;font-size:22px;font-weight:700;color:#fff;background:#206CBA;
+      border:0;border-radius:16px;padding:22px 40px;box-shadow:0 8px 20px rgba(32,108,186,.3);cursor:pointer}
+    #btnInstalar:active{transform:scale(.97);background:#164F85}
+    #btnInstalar svg{width:28px;height:28px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+    #depois{display:block;margin:18px auto 0;background:none;border:0;color:#586F7E;font-size:17px;text-decoration:underline;cursor:pointer}
+    #manual{display:none;margin-top:20px;font-size:17px;color:#203748;background:#EDF6FC;border-radius:14px;padding:16px;line-height:1.5}
   </style>
 </head>
 <body>
@@ -39,6 +56,20 @@
     <button onclick="carregar()">Tentar novamente</button>
   </div>
   <div id="canto"></div>
+
+  <!-- Botão de instalação (só aparece quando aberto no navegador, não no app instalado) -->
+  <div id="instalar" hidden>
+    <div class="caixa">
+      <img src="icons/icon-192.png" alt="">
+      <h2>Instalar o Totem de Atendimento</h2>
+      <p>Instale o app neste tablet para abrir em tela cheia, direto pela tela inicial.</p>
+      <button id="btnInstalar" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Instalar aplicativo
+      </button>
+      <div id="manual"></div>
+      <button id="depois" type="button">Agora não</button>
+    </div>
+  </div>
 
   <script>
     /* ====== COLE AQUI A URL DO APP DA WEB (termina em /exec) ====== */
@@ -70,10 +101,11 @@
     }, 55000);
 
     // Tela cheia ao primeiro toque (quando não estiver instalado como app)
-    document.addEventListener('pointerdown', () => {
+    document.addEventListener('pointerdown', e => {
+      if (e.target.closest && e.target.closest('#instalar')) return;   // não atrapalha o botão de instalar
       const el = document.documentElement;
       if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
-    }, { once: true });
+    });
 
     // Mantém a tela ligada (Wake Lock API)
     let wake;
@@ -89,6 +121,45 @@
     });
 
     document.addEventListener('contextmenu', e => e.preventDefault());
+
+    /* ---------- Instalação do PWA ---------- */
+    const telaInstalar = document.getElementById('instalar');
+    const manual = document.getElementById('manual');
+    let pedidoInstalacao = null;
+    const jaInstalado = () => matchMedia('(display-mode: fullscreen)').matches ||
+      matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    let adiado = false; try { adiado = sessionStorage.getItem('instalarDepois') === '1'; } catch(e) {}
+    if (!jaInstalado() && !adiado) telaInstalar.hidden = false;
+
+    // O Chrome avisa quando o app pode ser instalado; guardamos o pedido para o clique
+    addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      pedidoInstalacao = e;
+      manual.style.display = 'none';
+    });
+
+    document.getElementById('btnInstalar').addEventListener('click', async () => {
+      if (pedidoInstalacao) {
+        pedidoInstalacao.prompt();
+        const { outcome } = await pedidoInstalacao.userChoice;
+        pedidoInstalacao = null;
+        if (outcome === 'accepted') telaInstalar.hidden = true;
+        return;
+      }
+      // Sem o pedido automático (iPad/Safari, app já instalado ou Chrome ainda verificando)
+      const ios = /iPad|iPhone|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document;
+      manual.innerHTML = ios
+        ? 'No Safari, toque em <b>Compartilhar</b> (□↑) e depois em <b>Adicionar à Tela de Início</b>.'
+        : 'Toque no menu <b>⋮</b> do Chrome e escolha <b>Instalar app</b> (ou <b>Adicionar à tela inicial → Instalar</b>).<br>Se o app já estiver instalado, abra-o pelo ícone na tela inicial.';
+      manual.style.display = 'block';
+    });
+
+    document.getElementById('depois').addEventListener('click', () => {
+      telaInstalar.hidden = true;
+      try { sessionStorage.setItem('instalarDepois', '1'); } catch(e) {}
+    });
+
+    addEventListener('appinstalled', () => { telaInstalar.hidden = true; pedidoInstalacao = null; });
 
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
     carregar();
