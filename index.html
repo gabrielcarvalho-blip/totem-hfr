@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#206CBA">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Totem de Atendimento – Hospital Felício Rocho</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    html,body{margin:0;height:100%;overflow:hidden;background:#206CBA;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;overscroll-behavior:none}
+    iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#F3F6FA}
+    .aviso{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+      background:#206CBA;color:#fff;text-align:center;padding:32px;z-index:5}
+    .aviso[hidden]{display:none}
+    .aviso img{width:120px;height:120px}
+    .aviso h1{font-size:34px;margin:0}
+    .aviso p{font-size:20px;opacity:.85;margin:0;max-width:560px}
+    .aviso button{margin-top:10px;font-size:20px;font-weight:700;padding:18px 36px;border-radius:999px;border:0;background:#fff;color:#206CBA}
+    /* Canto secreto: 5 toques rápidos no canto superior direito recarregam o app */
+    #canto{position:fixed;top:0;right:0;width:70px;height:70px;z-index:6}
+  </style>
+</head>
+<body>
+  <iframe id="app" title="Totem de Atendimento" allow="fullscreen; autoplay"></iframe>
+
+  <div class="aviso" id="carregando">
+    <img src="icons/icon-192.png" alt="">
+    <h1>Carregando…</h1>
+  </div>
+  <div class="aviso" id="offline" hidden>
+    <img src="icons/icon-192.png" alt="">
+    <h1>Sem conexão com a internet</h1>
+    <p>O totem voltará a funcionar automaticamente assim que a conexão for restabelecida. Se precisar, procure a recepção.</p>
+    <button onclick="carregar()">Tentar novamente</button>
+  </div>
+  <div id="canto"></div>
+
+  <script>
+    /* ====== COLE AQUI A URL DO APP DA WEB (termina em /exec) ====== */
+    const APP_URL = 'https://script.google.com/a/macros/feliciorocho.org.br/s/AKfycbxDlGbk9mYviwBKwOIM-84W4mrFqRG2DlBPvJq9_aAfpFZ-yV_uHJy9bQmII27_y_Ul/exec';
+    /* ================================================================ */
+
+    const frame = document.getElementById('app');
+    const offline = document.getElementById('offline');
+    const carregando = document.getElementById('carregando');
+
+    function carregar(){
+      if (!navigator.onLine){ offline.hidden = false; return; }
+      offline.hidden = true;
+      carregando.hidden = false;
+      // ?page= pode ser repassado: index.html?page=painel abre o painel da TV
+      const page = new URLSearchParams(location.search).get('page');
+      frame.src = APP_URL + (page ? '?page=' + encodeURIComponent(page) : '') + (APP_URL.includes('?') || page ? '&' : '?') + 't=' + Date.now();
+    }
+    frame.addEventListener('load', () => { carregando.hidden = true; });
+
+    addEventListener('offline', () => { offline.hidden = false; });
+    addEventListener('online', carregar);
+
+    // Recarrega diariamente às 3h (atualizações e memória) e verifica a conexão periodicamente
+    setInterval(() => {
+      const d = new Date();
+      if (d.getHours() === 3 && d.getMinutes() === 0) carregar();
+      if (!navigator.onLine) offline.hidden = false;
+    }, 55000);
+
+    // Tela cheia ao primeiro toque (quando não estiver instalado como app)
+    document.addEventListener('pointerdown', () => {
+      const el = document.documentElement;
+      if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    }, { once: true });
+
+    // Mantém a tela ligada (Wake Lock API)
+    let wake;
+    async function manterTela(){ try{ wake = await navigator.wakeLock.request('screen'); }catch(e){} }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') manterTela(); });
+    manterTela();
+
+    // 5 toques no canto superior direito = recarregar
+    let toques = [];
+    document.getElementById('canto').addEventListener('pointerdown', () => {
+      const t = Date.now(); toques = toques.filter(x => t - x < 2500); toques.push(t);
+      if (toques.length >= 5){ toques = []; carregar(); }
+    });
+
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+    carregar();
+  </script>
+</body>
+</html>
