@@ -40,6 +40,15 @@
     #btnInstalar svg{width:28px;height:28px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
     #depois{display:block;margin:18px auto 0;background:none;border:0;color:#586F7E;font-size:17px;text-decoration:underline;cursor:pointer}
     #manual{display:none;margin-top:20px;font-size:17px;color:#203748;background:#EDF6FC;border-radius:14px;padding:16px;line-height:1.5}
+    /* ---- Tela "Iniciar totem" (ativa a tela cheia) ---- */
+    #iniciar{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;
+      background:linear-gradient(112deg,#12476B,#206CBA);color:#fff;text-align:center;padding:32px}
+    #iniciar[hidden]{display:none}
+    #iniciar img{width:130px;height:130px;border-radius:28px;box-shadow:0 12px 30px rgba(0,0,0,.2)}
+    #iniciar h1{font-size:34px;margin:6px 0 0;letter-spacing:-.02em}
+    #iniciar p{font-size:19px;color:#D7E7F4;margin:0;max-width:520px}
+    #btnIniciar{margin-top:10px;font-size:24px;font-weight:700;color:#164F85;background:#fff;border:0;border-radius:18px;padding:24px 56px;cursor:pointer;box-shadow:0 10px 26px rgba(0,0,0,.2)}
+    #btnIniciar:active{transform:scale(.97)}
   </style>
 </head>
 <body>
@@ -56,6 +65,14 @@
     <button onclick="carregar()">Tentar novamente</button>
   </div>
   <div id="canto"></div>
+
+  <!-- Tela "Iniciar totem": um toque coloca em tela cheia (escondendo a barra do Chrome) -->
+  <div id="iniciar" hidden>
+    <img src="icons/icon-192.png" alt="">
+    <h1>Totem de Atendimento</h1>
+    <p>SESMT · Departamento Pessoal · Recursos Humanos</p>
+    <button id="btnIniciar" type="button">Iniciar totem</button>
+  </div>
 
   <!-- Botão de instalação (só aparece quando aberto no navegador, não no app instalado) -->
   <div id="instalar" hidden>
@@ -100,13 +117,6 @@
       if (!navigator.onLine) offline.hidden = false;
     }, 55000);
 
-    // Tela cheia ao primeiro toque (quando não estiver instalado como app)
-    document.addEventListener('pointerdown', e => {
-      if (e.target.closest && e.target.closest('#instalar')) return;   // não atrapalha o botão de instalar
-      const el = document.documentElement;
-      if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
-    });
-
     // Mantém a tela ligada (Wake Lock API)
     let wake;
     async function manterTela(){ try{ wake = await navigator.wakeLock.request('screen'); }catch(e){} }
@@ -128,7 +138,7 @@
     let pedidoInstalacao = null;
     const jaInstalado = () => matchMedia('(display-mode: fullscreen)').matches ||
       matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-    let adiado = false; try { adiado = sessionStorage.getItem('instalarDepois') === '1'; } catch(e) {}
+    let adiado = false; try { adiado = localStorage.getItem('instalarDepois') === '1'; } catch(e) {}
     if (!jaInstalado() && !adiado) telaInstalar.hidden = false;
 
     // O Chrome avisa quando o app pode ser instalado; guardamos o pedido para o clique
@@ -156,8 +166,25 @@
 
     document.getElementById('depois').addEventListener('click', () => {
       telaInstalar.hidden = true;
-      try { sessionStorage.setItem('instalarDepois', '1'); } catch(e) {}
+      try { localStorage.setItem('instalarDepois', '1'); } catch(e) {}
     });
+
+    /* ---------- Tela cheia ---------- */
+    // Os toques no totem acontecem dentro do iframe do Google e não chegam a esta página,
+    // por isso a tela cheia é ativada por um botão próprio. Se alguém sair da tela cheia,
+    // a tela "Iniciar totem" volta e o próximo toque restaura.
+    const telaIniciar = document.getElementById('iniciar');
+    const podeTelaCheia = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+    const emTelaCheia = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+    function atualizarIniciar(){ telaIniciar.hidden = jaInstalado() || !podeTelaCheia || emTelaCheia(); }
+    document.getElementById('btnIniciar').addEventListener('click', () => {
+      const el = document.documentElement;
+      const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen();
+      if (p && p.catch) p.catch(() => { telaIniciar.hidden = true; });   // navegador recusou: segue sem tela cheia
+    });
+    document.addEventListener('fullscreenchange', atualizarIniciar);
+    document.addEventListener('webkitfullscreenchange', atualizarIniciar);
+    atualizarIniciar();
 
     addEventListener('appinstalled', () => { telaInstalar.hidden = true; pedidoInstalacao = null; });
 
